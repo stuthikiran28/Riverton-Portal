@@ -2,25 +2,27 @@ import { useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useIssueCitation } from '../../hooks/useCitations'
 import { showNotification } from '../../components/ui/Notification'
+import { useFeeConfig } from '../../hooks/useFeeConfig'
 import { useNavigate, useLocation } from 'react-router-dom'
-
-const VIOLATIONS = {
-  'Expired Permit': 55, 'No Permit': 75, 'Wrong Zone': 60,
-  'Overtime Parking': 40, 'Fire Hydrant': 100,
-  'Handicap Violation': 250, 'Double Parking': 65,
-}
 
 export default function IssueCitation() {
   const { profile } = useAuth()
   const issue = useIssueCitation()
   const navigate = useNavigate()
+
+  const { data: feeRows = [], isLoading: feesLoading } = useFeeConfig()
+   
+     const VIOLATIONS = feeRows
+    .filter(r => r.type === 'citation')
+    .reduce((acc, r) => ({ ...acc, [r.permit_or_violation]: r.fee_amount }), {})
+
   const location = useLocation()
   const plate = location.state?.plate
   const permit = location.state?.permit || {}
   const [form, setForm] = useState({ plate: permit.vehicle_plate||plate||'', neighborhood: permit.neighborhood||'Downtown', zone: permit.zone||'Z1', violation: 'Expired Permit', notes: '' })
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const fine = VIOLATIONS[form.violation]
-    
+  
 
   async function handleSubmit() {
     await issue.mutateAsync({

@@ -13,6 +13,7 @@ export default function OfficerLayout() {
       <div className="app-layout">
         <nav className="sidebar">
           <div className="sidebar-section">Officer Menu</div>
+          <NavLink to="/officer/dashboard" className={navClass}><span className="sidebar-icon">📋</span> Officer Dashboard </NavLink>
           <NavLink to="/officer"       end className={navClass}><span className="sidebar-icon">🔍</span> Permit Lookup</NavLink>
           <NavLink to="/officer/issue"     className={navClass}><span className="sidebar-icon">🚨</span> Issue Citation</NavLink>
           <NavLink to="/officer/log"       className={navClass}><span className="sidebar-icon">📋</span> My Log</NavLink>

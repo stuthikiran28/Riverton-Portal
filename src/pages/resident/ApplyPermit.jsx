@@ -2,15 +2,23 @@ import { useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useSubmitPermit } from '../../hooks/usePermits'
 import { showNotification } from '../../components/ui/Notification'
+import { useFeeConfig } from '../../hooks/useFeeConfig'
 import { useNavigate } from 'react-router-dom'
 
-const PERMIT_FEES = { 'Residential': 25, 'Visitor': 15, 'Contractor': 50, 'Temporary': 20, 'University Affiliate': 30 }
+//const PERMIT_FEES = { 'Residential': 25, 'Visitor': 15, 'Contractor': 50, 'Temporary': 20, 'University Affiliate': 30 }
 const STEPS = ['Applicant Info', 'Permit Details', 'Payment', 'Confirmation']
 
 export default function ApplyPermit() {
   const { profile } = useAuth()
   const submit = useSubmitPermit()
   const navigate = useNavigate()
+
+ const { data: feeRows = [], isLoading: feesLoading } = useFeeConfig()
+ 
+const PERMIT_FEES = feeRows
+  .filter(r => r.type === 'permit')
+  .reduce((acc, r) => ({ ...acc, [r.permit_or_violation]: r.fee_amount }), {})
+
   const [step, setStep] = useState(0)
   const [form, setForm] = useState({
     firstName: profile?.full_name?.split(' ')[0] || '',

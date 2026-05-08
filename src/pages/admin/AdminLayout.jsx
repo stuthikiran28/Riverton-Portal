@@ -18,6 +18,8 @@ export default function AdminLayout() {
           <NavLink to="/admin/citations"      className={navClass}><span className="sidebar-icon">🚨</span> Manage Citations</NavLink>
           <NavLink to="/admin/refunds"        className={navClass}><span className="sidebar-icon">💰</span> Refunds</NavLink>
           <NavLink to="/admin/kpi"            className={navClass}><span className="sidebar-icon">📈</span> KPI Dashboard</NavLink>
+          <NavLink to="/admin/manage"         className={navClass}><span className="sidebar-icon">👥</span> Management</NavLink>
+          <NavLink to="/admin/fee"            className={navClass}><span className="sidebar-icon">⚙️</span> FeeConfig</NavLink>
           <div className="sidebar-footer">
             <button className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'center' }} onClick={signOut}>
               Sign Out

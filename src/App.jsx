@@ -13,6 +13,7 @@ import OfficerLayout from './pages/officer/OfficerLayout'
 import PermitLookup from './pages/officer/PermitLookup'
 import IssueCitation from './pages/officer/IssueCitation'
 import MyLog from './pages/officer/MyLog'
+import OfficerDashboard from './pages/officer/OfficerDashboard'
 
 import AdminLayout from './pages/admin/AdminLayout'
 import Overview from './pages/admin/Overview'
@@ -20,6 +21,9 @@ import ManagePermits from './pages/admin/ManagePermits'
 import ManageCitations from './pages/admin/ManageCitations'
 import Refunds from './pages/admin/Refunds'
 import KpiDashboard from './pages/admin/KpiDashboard'
+import Management from './pages/admin/Management'
+import FeeConfig from './pages/admin/FeeConfig'
+
 
 /*function ProtectedRoute({ children, allowedRoles }) {
   const { user, profile, loading } = useAuth()
@@ -98,6 +102,7 @@ export default function App() {
             </ProtectedRoute>
           }>
             <Route index element={<PermitLookup />} />
+            <Route path="dashboard" element={<OfficerDashboard />} />
             <Route path="issue" element={<IssueCitation />} />
             <Route path="log" element={<MyLog />} />
           </Route>
@@ -112,6 +117,8 @@ export default function App() {
             <Route path="citations" element={<ManageCitations />} />
             <Route path="refunds" element={<Refunds />} />
             <Route path="kpi" element={<KpiDashboard />} />
+            <Route path="manage" element={<Management/>} />
+            <Route path="fee" element={<FeeConfig/>} />
           </Route>
         </Routes>
       </BrowserRouter>
