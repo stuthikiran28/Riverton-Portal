@@ -15,7 +15,7 @@ export default function ApplyPermit() {
 
  const { data: feeRows = [], isLoading: feesLoading } = useFeeConfig()
  
-const PERMIT_FEES = feeRows
+   const PERMIT_FEES = feeRows
   .filter(r => r.type === 'permit')
   .reduce((acc, r) => ({ ...acc, [r.permit_or_violation]: r.fee_amount }), {})
 

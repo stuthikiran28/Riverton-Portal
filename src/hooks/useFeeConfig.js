@@ -24,6 +24,7 @@ export function usePermitFees() {
   return { data: fees, ...rest }
 }
 
+
 export function useCitationFees() {
   const { data = [], ...rest } = useFeeConfig()
   const fees = data
