@@ -1,12 +1,14 @@
-import { useAllCitations, useUpdateCitation } from '../../hooks/useCitations'
+import { useAllCitationsFull, useUpdateCitation } from '../../hooks/useCitations'
 import { statusBadge } from '../../components/ui/Badge'
 import { showNotification } from '../../components/ui/Notification'
 import { format } from 'date-fns'
 
 export default function Refunds() {
-  const { data: citations = [], isLoading } = useAllCitations()
+  const { data: citations = [], isLoading } = useAllCitationsFull()
   const update = useUpdateCitation()
+
   const refunds = citations.filter(c => c.refund_claim)
+  const pendingCount = refunds.filter(r => r.refund_status === 'Pending').length
 
   async function approveRefund(c) {
     await update.mutateAsync({ id: c.id, refund_status: 'Approved', refund_amount: c.fine_amount, payment_status: 'Waived' })
@@ -22,13 +24,16 @@ export default function Refunds() {
     <>
       <div className="page-header">
         <div className="page-title">Refund Claims</div>
-        <div className="page-sub">{refunds.filter(r => r.refund_status === 'Pending').length} pending review</div>
+        <div className="page-sub">{pendingCount} pending review</div>
       </div>
       <div className="card">
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Citation ID</th><th>Date</th><th>Violation</th><th>Fine</th><th>Refund Status</th><th>Actions</th></tr>
+              <tr>
+                <th>Citation ID</th><th>Date</th><th>Violation</th>
+                <th>Fine</th><th>Refund Status</th><th>Actions</th>
+              </tr>
             </thead>
             <tbody>
               {isLoading ? (
@@ -40,13 +45,13 @@ export default function Refunds() {
                   <td><code>{c.citation_id}</code></td>
                   <td>{format(new Date(c.citation_date), 'MMM d, yyyy')}</td>
                   <td>{c.violation_type}</td>
-                  <td>${c.fine_amount}</td>
+                  <td>${Number(c.fine_amount).toLocaleString()}</td>
                   <td>{statusBadge(c.refund_status || 'Pending')}</td>
                   <td>
                     {c.refund_status === 'Pending' && (
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <button className="btn btn-success btn-sm" onClick={() => approveRefund(c)}>Approve</button>
-                        <button className="btn btn-danger btn-sm"  onClick={() => denyRefund(c)}>Deny</button>
+                        <button className="btn btn-success btn-sm" onClick={() => approveRefund(c)} disabled={update.isPending}>Approve</button>
+                        <button className="btn btn-danger btn-sm"  onClick={() => denyRefund(c)}    disabled={update.isPending}>Deny</button>
                       </div>
                     )}
                   </td>

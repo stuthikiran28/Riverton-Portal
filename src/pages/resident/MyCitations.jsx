@@ -1,71 +1,6 @@
-/*(old code, no link to make payment)
-import { useAuth } from '../../contexts/AuthContext'
-import { useMyCitations } from '../../hooks/useCitations'
-import { useUpdateCitation } from '../../hooks/useCitations'
-import { statusBadge } from '../../components/ui/Badge'
-import { showNotification } from '../../components/ui/Notification'
-import { format } from 'date-fns'
-
-export default function MyCitations() {
-  const { profile } = useAuth()
-  const { data: citations = [], isLoading } = useMyCitations(profile?.id)
-  const update = useUpdateCitation()
-
-  async function dispute(citation) {
-    await update.mutateAsync({ id: citation.id, refund_claim: true, refund_status: 'Pending' })
-    showNotification('Dispute filed successfully.', 'info')
-  }
-
-  return (
-    <>
-      <div className="page-header">
-        <div className="page-title">My Citations</div>
-        <div className="page-sub">{citations.length} citation{citations.length !== 1 ? 's' : ''} on record</div>
-      </div>
-      <div className="card">
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Citation ID</th><th>Date</th><th>Violation</th><th>Fine</th><th>Status</th><th>Action</th></tr>
-            </thead>
-            <tbody>
-              {isLoading ? (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 24 }}>Loading…</td></tr>
-              ) : citations.length === 0 ? (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 24 }}>No citations on record.</td></tr>
-              ) : citations.map(c => (
-                <tr key={c.id}>
-                  <td><code>{c.citation_id}</code></td>
-                  <td>{format(new Date(c.citation_date), 'MMM d, yyyy')}</td>
-                  <td>{c.violation_type}</td>
-                  <td>${c.fine_amount}</td>
-                  <td>{c.payment_status === 'Paid'|| c.payment_status === 'Waived' && statusBadge(c.payment_status)}
-                    {c.refund_status === 'Denied' || c.payment_status === 'Unpaid' && ( statusBadge(c.payment_status))}
-                  </td>
-                  <td>
-  {c.refund_claim && c.refund_status === 'Pending' && (
-    <span className="badge badge-warn">Dispute Raised</span>
-  )}
-  {c.refund_claim && c.refund_status === 'Denied' && (
-    <span className="badge badge-danger">Dispute Denied</span>
-  )}
-  {!c.refund_claim && c.payment_status === 'Unpaid' && (
-    <button className="btn btn-secondary btn-sm" onClick={() => dispute(c)}>Dispute</button>
-  )}
-</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </>
-  )
-}*/
-
 import { useState } from 'react'
-import { useAllCitations } from '../../hooks/useCitations'
-import { useUpdateCitation } from '../../hooks/useCitations'
+import { useAuth } from '../../contexts/AuthContext'
+import { useMyCitations, useUpdateCitation } from '../../hooks/useCitations'
 import { statusBadge } from '../../components/ui/Badge'
 import { showNotification } from '../../components/ui/Notification'
 import { format } from 'date-fns'
@@ -341,8 +276,9 @@ function DetailGrid({ items }) {
 }
 
 // ── Main Page ──────────────────────────────────────────────────────────────
-export default function ManageCitations() {
-  const { data: citations = [], isLoading, isError, error } = useAllCitations()
+export default function MyCitations() {
+  const { profile } = useAuth()
+  const { data: citations = [], isLoading, isError, error } = useMyCitations(profile?.id)
   const [selected, setSelected] = useState(null)
 
   if (isError) return (
@@ -360,8 +296,10 @@ export default function ManageCitations() {
 
       <div className="page-header flex-between">
         <div>
-          <div className="page-title">Citations</div>
-          <div className="page-sub">{citations.length} total citations</div>
+          <div className="page-title">My Citations</div>
+          <div className="page-sub">
+            {citations.length} citation{citations.length !== 1 ? 's' : ''} on record
+          </div>
         </div>
       </div>
 
@@ -377,6 +315,8 @@ export default function ManageCitations() {
             <tbody>
               {isLoading ? (
                 <tr><td colSpan={8} style={{ textAlign: 'center', padding: 24 }}>Loading…</td></tr>
+              ) : citations.length === 0 ? (
+                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 24, color: '#9ca3af' }}>No citations on record.</td></tr>
               ) : citations.map(c => (
                 <tr key={c.id}>
                   <td>
@@ -396,21 +336,15 @@ export default function ManageCitations() {
                   <td>{c.violation_type || '—'}</td>
                   <td>{c.zone          || '—'}</td>
                   <td>{c.citation_date ? format(new Date(c.citation_date), 'MMM d, yyyy') : '—'}</td>
-                  <td>{c.fine_amount != null ? `$${c.fine_amount}` : '—'}</td>
+                  <td>{c.fine_amount != null ? `$${Number(c.fine_amount).toLocaleString()}` : '—'}</td>
+                  <td>{statusBadge(c.payment_status)}</td>
                   <td>
-                    {(c.payment_status === 'Paid'   ||
-                      c.payment_status === 'Waived' ||
-                      c.payment_status === 'Unpaid')
-                      && statusBadge(c.payment_status)}
-                    
-                  </td>
-                  <td>
-                    {c.refund_claim && c.refund_status === 'Pending'
-                      && <span className="badge badge-warn">Disputed</span>}
-                    {c.refund_claim && c.refund_status === 'Denied'
-                      && <span className="badge badge-danger">Dispute Denied</span>}
-                    {!c.refund_claim && c.payment_status === 'Unpaid'
-                      && <button className="btn btn-secondary btn-sm" onClick={() => setSelected(c)}>Dispute</button>}
+                    {c.refund_claim && c.refund_status === 'Pending' &&
+                      <span className="badge badge-warn">Disputed</span>}
+                    {c.refund_claim && c.refund_status === 'Denied' &&
+                      <span className="badge badge-danger">Dispute Denied</span>}
+                    {!c.refund_claim && c.payment_status === 'Unpaid' &&
+                      <button className="btn btn-secondary btn-sm" onClick={() => setSelected(c)}>Dispute</button>}
                   </td>
                 </tr>
               ))}

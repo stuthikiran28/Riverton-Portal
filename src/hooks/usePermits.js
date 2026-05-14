@@ -1,35 +1,91 @@
+// src/hooks/usePermits.js
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 
+export const PERMITS_PAGE_SIZE = 50
+
+// ─── RESIDENT: own permits only ───────────────────────────────
 export function useMyPermits(userId) {
   return useQuery({
-    queryKey: ['permits', userId],
+    queryKey: ['permits', 'mine', userId],
     queryFn: async () => {
-      const { data, error } = await supabase.from('permits').select('*').eq('applicant_id', userId).order('created_at', { ascending: false })
+      const { data, error } = await supabase
+        .from('permits')
+        .select('*')
+        .eq('applicant_id', userId)
+        .order('created_at', { ascending: false })
       if (error) throw error
-      return data
+      return data ?? []
     },
     enabled: !!userId,
   })
 }
 
-export function useAllPermits() {
+// ─── ADMIN: paginated + exact total count ─────────────────────
+export function useAllPermits(page = 0) {
   return useQuery({
-    queryKey: ['permits', 'all'],
+    queryKey: ['permits', 'admin', 'all', page],
     queryFn: async () => {
-      const { data, error } = await supabase.from('permits').select('*, profiles(full_name, email, neighborhood)').order('created_at', { ascending: false })
+      const from = page * PERMITS_PAGE_SIZE
+      const to   = from + PERMITS_PAGE_SIZE - 1
+
+      const { data, error, count } = await supabase
+        .from('permits')
+        .select('*, profiles(full_name, email, neighborhood)', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(from, to)
+
       if (error) throw error
-      return data
+      return { rows: data ?? [], total: count ?? 0 }
     },
+    keepPreviousData: true,
   })
 }
 
+// ─── ADMIN: fetch ALL permits for KPIs / Overview ─────────────
+export function useAllPermitsFull() {
+  return useQuery({
+    queryKey: ['permits', 'admin', 'full'],
+    queryFn: async () => {
+      const PAGE = 1000
+      let all = [], from = 0
+
+      while (true) {
+        const { data, error, count } = await supabase
+          .from('permits')
+          .select('*', { count: 'exact' })   // no profiles join — faster & no row gaps
+          .order('created_at', { ascending: false })
+          .range(from, from + PAGE - 1)
+
+        if (error) throw error
+
+        all = [...all, ...(data ?? [])]
+
+        // Stop when we've fetched everything
+        if (all.length >= count || (data ?? []).length < PAGE) break
+
+        from += PAGE
+      }
+
+      console.log('[useAllPermitsFull] total fetched:', all.length)
+      return all
+    },
+    staleTime: 0,          // always re-fetch — no stale cache
+    refetchOnMount: true,
+  })
+}
+
+// ─── MUTATION: submit a new permit ────────────────────────────
 export function useSubmitPermit() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (permitData) => {
       const permitId = 'PRM-' + String(Math.floor(Math.random() * 99999)).padStart(5, '0')
-      const { data, error } = await supabase.from('permits').insert([{ ...permitData, permit_id: permitId }]).select().single()
+      const { data, error } = await supabase
+        .from('permits')
+        .insert([{ ...permitData, permit_id: permitId }])
+        .select()
+        .single()
       if (error) throw error
       return data
     },
@@ -37,6 +93,7 @@ export function useSubmitPermit() {
   })
 }
 
+// ─── MUTATION: update permit status ───────────────────────────
 export function useUpdatePermitStatus() {
   const qc = useQueryClient()
   return useMutation({
@@ -53,25 +110,14 @@ export function useUpdatePermitStatus() {
   })
 }
 
-/*export function usePermitByPlate(plate) {
-  return useQuery({
-    queryKey: ['permit-lookup', plate],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('permits').select('*, profiles(full_name)').eq('vehicle_plate', plate.toUpperCase()).eq('status', 'Approved').single()
-      if (error) return null
-      return data
-    },
-    enabled: !!plate && plate.length > 3,
-  })
-}*/
-
+// ─── LOOKUP: permit by plate ───────────────────────────────────
 export function usePermitByPlate(plate) {
   return useQuery({
     queryKey: ['permits', 'plate', plate],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('permits')
-        .select('*')          // ← remove the profiles join entirely
+        .select('*')
         .eq('vehicle_plate', plate.toUpperCase().trim())
         .in('status', ['Approved', 'Pending', 'Expired', 'Denied'])
         .order('created_at', { ascending: false })
@@ -88,4 +134,3 @@ export function usePermitByPlate(plate) {
     retry: false,
   })
 }
-

@@ -2,10 +2,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 
+export const CITATIONS_PAGE_SIZE = 50
+
 // ─── RESIDENT: own citations only ─────────────────────────────
 export function useMyCitations(userId) {
   return useQuery({
-    // Namespaced key — never collides with 'all' or 'officer'
     queryKey: ['citations', 'mine', userId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -14,28 +15,63 @@ export function useMyCitations(userId) {
         .eq('resident_id', userId)
         .order('citation_date', { ascending: false })
       if (error) throw error
-      // Always return an array — never undefined (v5 requires a value)
       return data ?? []
     },
-    // Only runs when userId is a real non-empty value
     enabled: Boolean(userId),
   })
 }
 
-// ─── ADMIN: all citations ──────────────────────────────────────
-export function useAllCitations() {
+// ─── ADMIN: paginated + exact total count ─────────────────────
+export function useAllCitations(page = 0) {
   return useQuery({
-    // 'admin' prefix prevents key collision with 'mine' and 'officer'
-    queryKey: ['citations', 'admin', 'all'],
+    queryKey: ['citations', 'admin', 'all', page],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const from = page * CITATIONS_PAGE_SIZE
+      const to   = from + CITATIONS_PAGE_SIZE - 1
+
+      const { data, error, count } = await supabase
         .from('citations')
-        .select('*, profiles!citations_officer_id_fkey(full_name)')
+        .select('*, profiles!citations_officer_id_fkey(full_name)', { count: 'exact' })
         .order('created_at', { ascending: false })
-      // Remove the console.log before production
+        .range(from, to)
+
       if (error) throw error
-      return data ?? []
+      return { rows: data ?? [], total: count ?? 0 }
     },
+    keepPreviousData: true,
+  })
+}
+
+// ─── ADMIN: fetch ALL citations for KPIs / Overview ───────────
+export function useAllCitationsFull() {
+  return useQuery({
+    queryKey: ['citations', 'admin', 'full'],
+    queryFn: async () => {
+      const PAGE = 1000
+      let all = [], from = 0
+
+      while (true) {
+        const { data, error, count } = await supabase
+          .from('citations')
+          .select('*', { count: 'exact' })   // no join — faster & no row gaps
+          .order('created_at', { ascending: false })
+          .range(from, from + PAGE - 1)
+
+        if (error) throw error
+
+        all = [...all, ...(data ?? [])]
+
+        // Stop when we've fetched everything
+        if (all.length >= count || (data ?? []).length < PAGE) break
+
+        from += PAGE
+      }
+
+      console.log('[useAllCitationsFull] total fetched:', all.length)
+      return all
+    },
+    staleTime: 0,          // always re-fetch — no stale cache
+    refetchOnMount: true,
   })
 }
 
@@ -72,20 +108,17 @@ export function useIssueCitation() {
       return data
     },
     onSuccess: (_, variables) => {
-      // Invalidate only the specific officer's log and admin all-view
-      // NOT the resident 'mine' queries — avoids triggering re-auth
       qc.invalidateQueries({ queryKey: ['citations', 'officer', variables.officer_id] })
-      qc.invalidateQueries({ queryKey: ['citations', 'admin', 'all'] })
+      qc.invalidateQueries({ queryKey: ['citations', 'admin'] })
     },
   })
 }
 
-// ─── MUTATION: update a citation (refund claim, status) ───────
+// ─── MUTATION: update a citation ──────────────────────────────
 export function useUpdateCitation() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ id, ...updates }) => {
-      // Select the updated row so callers can use the return value
       const { data, error } = await supabase
         .from('citations')
         .update(updates)
@@ -96,13 +129,10 @@ export function useUpdateCitation() {
       return data
     },
     onSuccess: (updatedRow) => {
-      // Targeted invalidation: only refresh queries that touch this row
       if (updatedRow?.resident_id) {
-        qc.invalidateQueries({
-          queryKey: ['citations', 'mine', updatedRow.resident_id],
-        })
+        qc.invalidateQueries({ queryKey: ['citations', 'mine', updatedRow.resident_id] })
       }
-      qc.invalidateQueries({ queryKey: ['citations', 'admin', 'all'] })
+      qc.invalidateQueries({ queryKey: ['citations', 'admin'] })
     },
   })
 }

@@ -1,5 +1,5 @@
-import { useAllPermits } from '../../hooks/usePermits'
-import { useAllCitations } from '../../hooks/useCitations'
+import { useAllPermitsFull }   from '../../hooks/usePermits'
+import { useAllCitationsFull } from '../../hooks/useCitations'
 import { useState } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -124,10 +124,23 @@ function TopLabel({ x, y, width, value, formatter }) {
   )
 }
 
+/* ── Loading skeleton ────────────────────────────────────────────────────  */
+function LoadingSkeleton() {
+  return (
+    <div style={{ padding: '60px 0', textAlign: 'center', color: '#94A3B8', fontSize: 14 }}>
+      <div style={{ fontSize: 28, marginBottom: 10 }}>⏳</div>
+      Fetching all records… this may take a moment for large datasets.
+    </div>
+  )
+}
+
 /* ── Main dashboard ─────────────────────────────────────────────────────── */
 export default function KpiDashboard() {
-  const { data: permits   = [] } = useAllPermits()
-  const { data: citations = [] } = useAllCitations()
+  // ← Both hooks loop-fetch ALL rows (no 1000-row cap)
+  const { data: permits   = [], isLoading: permitsLoading   } = useAllPermitsFull()
+  const { data: citations = [], isLoading: citationsLoading } = useAllCitationsFull()
+
+  const isLoading = permitsLoading || citationsLoading
 
   const [pageView,      setPageView]      = useState('graphs')
   const [syncMode,      setSyncMode]      = useState('avg_hrs')
@@ -141,14 +154,13 @@ export default function KpiDashboard() {
   const totalCitations = citations.length
   const wrongfulTotal  = citations.filter(c => c.is_wrongful_citation).length
 
-  // Total Revenue = permit fees + citation fines (both sources)
   const permitFeeTotal = permits.reduce((s, p) => s + (Number(p.permit_fee) || 0), 0)
   const grossFines     = citations.reduce((s, c) => s + (Number(c.fine_amount) || 0), 0)
   const totalRefunds   = citations
     .filter(c => c.refund_status === 'Approved')
     .reduce((s, c) => s + (Number(c.refund_amount) || 0), 0)
-  const totalRevenue   = permitFeeTotal + grossFines   // permit fees + fines
-  const netRevenue     = totalRevenue - totalRefunds   // minus approved refunds
+  const totalRevenue   = permitFeeTotal + grossFines
+  const netRevenue     = totalRevenue - totalRefunds
 
   const claimsFiled    = citations.filter(c => c.refund_claim).length
   const claimsApproved = citations.filter(c => c.refund_claim && c.refund_status === 'Approved').length
@@ -247,7 +259,11 @@ export default function KpiDashboard() {
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
         <div>
           <div className="page-title">KPI Dashboard</div>
-          <div className="page-sub">System performance and enforcement accuracy metrics</div>
+          <div className="page-sub">
+            {isLoading
+              ? 'Loading all records…'
+              : `${numFmt(totalPermits)} permits · ${numFmt(totalCitations)} citations`}
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 4 }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: '#6B7A99', whiteSpace: 'nowrap' }}>View:</span>
@@ -263,402 +279,321 @@ export default function KpiDashboard() {
         </div>
       </div>
 
-      {/* ── 6 Summary KPI cards ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, marginBottom: 24 }}>
-        <SummaryCard label="Total Permits"   value={numFmt(totalPermits)}          sub="All time"               color="#003DA5" icon="🪪" />
-        <SummaryCard label="Permit Fee Rev." value={`$${numFmt(permitFeeTotal)}`}  sub="Sum of permit_fee"      color="#2563EB" icon="🏷️" />
-        <SummaryCard label="Citations"       value={numFmt(totalCitations)}         sub={`${wrongfulTotal} wrongful`} color="#D94F3D" icon="🚨" />
-        <SummaryCard label="Total Revenue"   value={`$${numFmt(totalRevenue)}`}    sub="Permit fees + fines"    color="#E07B00" icon="💰" />
-        <SummaryCard label="Total Refunds"   value={`$${numFmt(totalRefunds)}`}    sub={`${claimsApproved} approved`} color="#1A7F4B" icon="↩️" />
-        <SummaryCard label="Net Revenue"     value={`$${numFmt(netRevenue)}`}      sub="Revenue − refunds"      color="#6B3FA0" icon="📈" />
-      </div>
-
-      {/* ── Row 1: KPI 1 + KPI 2 Violation ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
-
-        {/* KPI 1 */}
-        <ChartCard
-          kpiLabel="KPI 1 — Device Sync Lag"
-          kpiColor="#003DA5"
-          title="Avg device_sync_lag_hrs by Submission Source"
-          toggleOptions={[
-            { label: 'Hrs', value: 'avg_hrs' },
-            { label: 'Min', value: 'avg_min' },
-            { label: 'Sec', value: 'avg_sec' },
-          ]}
-          toggleValue={syncMode}
-          onToggle={setSyncMode}
-        >
-          {showGraph && (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart
-                data={syncData}
-                margin={{ top: 28, right: 20, left: 0, bottom: 8 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#DDE5F0" vertical={false} />
-                <XAxis
-                  dataKey="source"
-                  tick={{ fontSize: 12, fill: '#475569' }}
-                  axisLine={{ stroke: '#CBD5E1' }}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: '#64748B' }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={55}
-                  tickFormatter={v => `${v}`}
-                  label={{
-                    value: `device_sync_lag (${syncUnit})`,
-                    angle: -90,
-                    position: 'insideLeft',
-                    offset: 12,
-                    style: { fontSize: 10, fill: '#94A3B8', textAnchor: 'middle' },
-                  }}
-                />
-                <Tooltip
-                  formatter={v => [`${v} ${syncUnit}`, `Avg (${syncUnit})`]}
-                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E2E8F0' }}
-                />
-                <Bar dataKey={syncKey} radius={[5, 5, 0, 0]} isAnimationActive={false} maxBarSize={72}>
-                  <LabelList
-                    dataKey={syncKey}
-                    content={({ x, y, width, value }) => (
-                      <TopLabel x={x} y={y} width={width} value={value}
-                        formatter={v => `${v} ${syncUnit}`} />
-                    )}
-                  />
-                  {syncData.map((_, i) => <Cell key={i} fill={SYNC_COLORS[i % SYNC_COLORS.length]} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-          {showTable && (
-            <div style={{ marginTop: showGraph ? 14 : 0 }}>
-              <DataTable
-                columns={[
-                  { label: 'Source',    key: 'source' },
-                  { label: 'Avg (hrs)', key: 'avg_hrs', right: true, format: v => `${v} hrs` },
-                  { label: 'Avg (min)', key: 'avg_min', right: true, format: v => `${v} min` },
-                  { label: 'Avg (sec)', key: 'avg_sec', right: true, format: v => `${v} sec` },
-                ]}
-                rows={syncData}
-              />
-            </div>
-          )}
-        </ChartCard>
-
-        {/* KPI 2 — Violation */}
-        <ChartCard
-          kpiLabel="KPI 2 — Wrongful Citation Rate"
-          kpiColor="#D94F3D"
-          title="Wrongful Citations by Violation Type"
-          toggleOptions={[
-            { label: '% of Total', value: 'pct'   },
-            { label: 'Count',      value: 'count' },
-          ]}
-          toggleValue={violationMode}
-          onToggle={setViolationMode}
-        >
-          {showGraph && (
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart
-                data={violationData}
-                layout="vertical"
-                margin={{ top: 4, right: 52, left: 0, bottom: 4 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#DDE5F0" horizontal={false} />
-                <XAxis
-                  type="number"
-                  tick={{ fontSize: 11, fill: '#64748B' }}
-                  tickFormatter={violationMode === 'pct' ? pctFmt : undefined}
-                  axisLine={{ stroke: '#CBD5E1' }}
-                  tickLine={false}
-                />
-                <YAxis
-                  dataKey="violation_type"
-                  type="category"
-                  tick={{ fontSize: 11, fill: '#334155' }}
-                  width={130}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip formatter={v => [violationMode === 'pct' ? `${v}%` : v, violationMode === 'pct' ? '% of Citations' : 'Count']} />
-                <Bar dataKey={violationMode} radius={[0, 4, 4, 0]} isAnimationActive={false} maxBarSize={32}>
-                  <LabelList
-                    dataKey={violationMode}
-                    position="right"
-                    formatter={v => violationMode === 'pct' ? `${v}%` : v}
-                    style={{ fontSize: 11, fontWeight: 700, fill: '#1E293B' }}
-                  />
-                  {violationData.map((_, i) => <Cell key={i} fill={VIOLATION_COLORS[i % VIOLATION_COLORS.length]} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-          {showTable && (
-            <div style={{ marginTop: showGraph ? 14 : 0 }}>
-              <DataTable
-                columns={[
-                  { label: 'Violation Type',     key: 'violation_type' },
-                  { label: 'Wrongful',           key: 'count', right: true },
-                  { label: '% of All Citations', key: 'pct',   right: true, format: v => `${v}%` },
-                ]}
-                rows={violationData}
-              />
-            </div>
-          )}
-        </ChartCard>
-      </div>
-
-      {/* ── Row 2: KPI 2 Neighborhood ── */}
-      <div style={{ marginBottom: 20 }}>
-        <ChartCard
-          kpiLabel="KPI 2 — Wrongful Citation Rate"
-          kpiColor="#D94F3D"
-          title="Citation Share & Wrongful Rate by Neighborhood"
-          toggleOptions={[
-            { label: '% View', value: 'pct'   },
-            { label: 'Counts', value: 'count' },
-          ]}
-          toggleValue={neighborMode}
-          onToggle={setNeighborMode}
-        >
-          {showGraph && (
-            <ResponsiveContainer width="100%" height={290}>
-              <ComposedChart
-                data={neighborhoodData}
-                margin={{ top: 26, right: 24, left: 0, bottom: 8 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#DDE5F0" vertical={false} />
-                <XAxis
-                  dataKey="neighborhood"
-                  tick={{ fontSize: 12, fill: '#475569' }}
-                  axisLine={{ stroke: '#CBD5E1' }}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: '#64748B' }}
-                  tickFormatter={neighborMode === 'pct' ? pctFmt : undefined}
-                  axisLine={false}
-                  tickLine={false}
-                  width={40}
-                />
-                <Tooltip formatter={(v, name) => [neighborMode === 'pct' ? `${v}%` : v, name]} />
-                <Legend verticalAlign="top" height={28} iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-                <Bar
-                  dataKey={neighborMode === 'pct' ? 'citSharePct' : 'citCount'}
-                  name="Citation Share"
-                  fill="#4472C4"
-                  radius={[4, 4, 0, 0]}
-                  isAnimationActive={false}
-                  maxBarSize={48}
-                >
-                  <LabelList
-                    dataKey={neighborMode === 'pct' ? 'citSharePct' : 'citCount'}
-                    content={({ x, y, width, value }) => (
-                      <TopLabel x={x} y={y} width={width} value={value}
-                        formatter={v => neighborMode === 'pct' ? `${v}%` : v} />
-                    )}
-                  />
-                </Bar>
-                <Line
-                  dataKey={neighborMode === 'pct' ? 'wrongfulPct' : 'wrongfulCount'}
-                  name="Wrongful Rate"
-                  type="monotone"
-                  stroke="#ED7D31"
-                  strokeWidth={2.5}
-                  dot={{ r: 5, fill: '#ED7D31', strokeWidth: 0 }}
-                  isAnimationActive={false}
-                >
-                  <LabelList
-                    dataKey={neighborMode === 'pct' ? 'wrongfulPct' : 'wrongfulCount'}
-                    position="top"
-                    formatter={v => neighborMode === 'pct' ? `${v}%` : v}
-                    style={{ fontSize: 10, fontWeight: 700, fill: '#C05621' }}
-                  />
-                </Line>
-              </ComposedChart>
-            </ResponsiveContainer>
-          )}
-          {showTable && (
-            <div style={{ marginTop: showGraph ? 14 : 0 }}>
-              <DataTable
-                columns={[
-                  { label: 'Neighborhood',  key: 'neighborhood' },
-                  { label: 'Citations',     key: 'citCount',      right: true },
-                  { label: '% of Total',    key: 'citSharePct',   right: true, format: v => `${v}%` },
-                  { label: 'Wrongful',      key: 'wrongfulCount', right: true },
-                  { label: 'Wrongful Rate', key: 'wrongfulPct',   right: true, format: v => `${v}%` },
-                ]}
-                rows={neighborhoodData}
-              />
-            </div>
-          )}
-        </ChartCard>
-      </div>
-
-      {/* ── Row 3: KPI 5 + KPI 3&4 ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 20 }}>
-
-        {/* KPI 5 */}
-        <ChartCard
-          kpiLabel="KPI 5 — Refund Claim Approval Rate"
-          kpiColor="#1A7F4B"
-          title="Refund Claims — Approved vs. Denied"
-          toggleOptions={[
-            { label: '% Rate', value: 'pct'   },
-            { label: 'Count',  value: 'count' },
-          ]}
-          toggleValue={claimsMode}
-          onToggle={setClaimsMode}
-        >
-          {showGraph && (
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart
-                data={claimsData}
-                layout="vertical"
-                margin={{ top: 4, right: 60, left: 0, bottom: 4 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#DDE5F0" horizontal={false} />
-                <XAxis
-                  type="number"
-                  domain={claimsMode === 'pct' ? [0, 100] : undefined}
-                  tickFormatter={claimsMode === 'pct' ? pctFmt : undefined}
-                  tick={{ fontSize: 11, fill: '#64748B' }}
-                  axisLine={{ stroke: '#CBD5E1' }}
-                  tickLine={false}
-                />
-                <YAxis
-                  dataKey="status"
-                  type="category"
-                  tick={{ fontSize: 12, fill: '#334155' }}
-                  width={64}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip formatter={v => [claimsMode === 'pct' ? `${v}%` : v, 'Claims']} />
-                <Bar dataKey={claimsMode} radius={[0, 4, 4, 0]} isAnimationActive={false} maxBarSize={36}>
-                  <LabelList
-                    dataKey={claimsMode}
-                    position="right"
-                    formatter={v => claimsMode === 'pct' ? `${v}%` : v}
-                    style={{ fontSize: 13, fontWeight: 700, fill: '#1E293B' }}
-                  />
-                  <Cell fill="#4CAF50" />
-                  <Cell fill="#D94F3D" />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-          <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap' }}>
-            <div style={{ fontSize: 12, color: '#6B7A99' }}>Filed: <strong>{claimsFiled}</strong></div>
-            <div style={{ fontSize: 12, color: '#1A7F4B' }}>Approved: <strong>{claimsApproved}</strong></div>
-            <div style={{ fontSize: 12, color: '#D94F3D' }}>Denied: <strong>{claimsDenied}</strong></div>
+      {/* ── Loading state ── */}
+      {isLoading ? <LoadingSkeleton /> : (
+        <>
+          {/* ── 6 Summary KPI cards ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, marginBottom: 24 }}>
+            <SummaryCard label="Total Permits"   value={numFmt(totalPermits)}         sub="All time"                    color="#003DA5" icon="🪪" />
+            <SummaryCard label="Permit Fee Rev." value={`$${numFmt(permitFeeTotal)}`} sub="Sum of permit_fee"           color="#2563EB" icon="🏷️" />
+            <SummaryCard label="Citations"        value={numFmt(totalCitations)}        sub={`${wrongfulTotal} wrongful`} color="#D94F3D" icon="🚨" />
+            <SummaryCard label="Total Revenue"   value={`$${numFmt(totalRevenue)}`}   sub="Permit fees + fines"         color="#E07B00" icon="💰" />
+            <SummaryCard label="Total Refunds"   value={`$${numFmt(totalRefunds)}`}   sub={`${claimsApproved} approved`} color="#1A7F4B" icon="↩️" />
+            <SummaryCard label="Net Revenue"     value={`$${numFmt(netRevenue)}`}     sub="Revenue − refunds"           color="#6B3FA0" icon="📈" />
           </div>
-          {showTable && (
-            <div style={{ marginTop: 14 }}>
-              <DataTable
-                columns={[
-                  { label: 'Status', key: 'status' },
-                  { label: 'Count',  key: 'count', right: true },
-                  { label: '% Rate', key: 'pct',   right: true, format: v => `${v}%` },
-                ]}
-                rows={claimsData}
-              />
-            </div>
-          )}
-        </ChartCard>
 
-        {/* KPI 3 & 4 */}
-        <ChartCard
-          kpiLabel="KPI 3 & 4 — Refund Cost Rate / Net Revenue"
-          kpiColor="#E07B00"
-          title="Fine Revenue & Refunds by Neighborhood"
-          toggleOptions={[
-            { label: '$ Amount', value: 'sum' },
-            { label: '% Share',  value: 'pct' },
-          ]}
-          toggleValue={financeMode}
-          onToggle={setFinanceMode}
-        >
-          {showGraph && (
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart
-                data={financeData}
-                margin={{ top: 28, right: 16, left: 0, bottom: 8 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#DDE5F0" vertical={false} />
-                <XAxis
-                  dataKey="neighborhood"
-                  tick={{ fontSize: 11, fill: '#475569' }}
-                  angle={-12}
-                  textAnchor="end"
-                  height={44}
-                  axisLine={{ stroke: '#CBD5E1' }}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: '#64748B' }}
-                  tickFormatter={financeMode === 'pct' ? pctFmt : dollarFmt}
-                  axisLine={false}
-                  tickLine={false}
-                  width={52}
-                />
-                <Tooltip formatter={(v, name) => [financeMode === 'pct' ? `${v}%` : `$${v.toLocaleString()}`, name]} />
-                <Legend verticalAlign="top" height={28} iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-                <Bar
-                  dataKey={financeMode === 'sum' ? 'Amount' : 'Amount_pct'}
-                  name="Amount Collected"
-                  fill="#4472C4"
-                  radius={[4, 4, 0, 0]}
-                  isAnimationActive={false}
-                  maxBarSize={32}
-                >
-                  <LabelList
-                    dataKey={financeMode === 'sum' ? 'Amount' : 'Amount_pct'}
-                    content={({ x, y, width, value }) => (
-                      <TopLabel x={x} y={y} width={width} value={value}
-                        formatter={v => financeMode === 'pct' ? `${v}%` : dollarFmt(v)} />
-                    )}
+          {/* ── Row 1: KPI 1 + KPI 2 Violation ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+
+            {/* KPI 1 */}
+            <ChartCard
+              kpiLabel="KPI 1 — Device Sync Lag"
+              kpiColor="#003DA5"
+              title="Avg device_sync_lag_hrs by Submission Source"
+              toggleOptions={[
+                { label: 'Hrs', value: 'avg_hrs' },
+                { label: 'Min', value: 'avg_min' },
+                { label: 'Sec', value: 'avg_sec' },
+              ]}
+              toggleValue={syncMode}
+              onToggle={setSyncMode}
+            >
+              {showGraph && (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={syncData} margin={{ top: 28, right: 20, left: 0, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#DDE5F0" vertical={false} />
+                    <XAxis dataKey="source" tick={{ fontSize: 12, fill: '#475569' }} axisLine={{ stroke: '#CBD5E1' }} tickLine={false} />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} width={55}
+                      label={{ value: `device_sync_lag (${syncUnit})`, angle: -90, position: 'insideLeft', offset: 12, style: { fontSize: 10, fill: '#94A3B8', textAnchor: 'middle' } }}
+                    />
+                    <Tooltip
+                      formatter={v => [`${v} ${syncUnit}`, `Avg (${syncUnit})`]}
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #E2E8F0' }}
+                    />
+                    <Bar dataKey={syncKey} radius={[5, 5, 0, 0]} isAnimationActive={false} maxBarSize={72}>
+                      <LabelList
+                        dataKey={syncKey}
+                        content={({ x, y, width, value }) => (
+                          <TopLabel x={x} y={y} width={width} value={value} formatter={v => `${v} ${syncUnit}`} />
+                        )}
+                      />
+                      {syncData.map((_, i) => <Cell key={i} fill={SYNC_COLORS[i % SYNC_COLORS.length]} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+              {showTable && (
+                <div style={{ marginTop: showGraph ? 14 : 0 }}>
+                  <DataTable
+                    columns={[
+                      { label: 'Source',    key: 'source' },
+                      { label: 'Avg (hrs)', key: 'avg_hrs', right: true, format: v => `${v} hrs` },
+                      { label: 'Avg (min)', key: 'avg_min', right: true, format: v => `${v} min` },
+                      { label: 'Avg (sec)', key: 'avg_sec', right: true, format: v => `${v} sec` },
+                    ]}
+                    rows={syncData}
                   />
-                </Bar>
-                <Bar
-                  dataKey={financeMode === 'sum' ? 'refund_amount' : 'refund_pct'}
-                  name="Refund Amount"
-                  fill="#ED7D31"
-                  radius={[4, 4, 0, 0]}
-                  isAnimationActive={false}
-                  maxBarSize={32}
-                >
-                  <LabelList
-                    dataKey={financeMode === 'sum' ? 'refund_amount' : 'refund_pct'}
-                    content={({ x, y, width, value }) => (
-                      <TopLabel x={x} y={y} width={width} value={value}
-                        formatter={v => financeMode === 'pct' ? `${v}%` : dollarFmt(v)} />
-                    )}
+                </div>
+              )}
+            </ChartCard>
+
+            {/* KPI 2 — Violation */}
+            <ChartCard
+              kpiLabel="KPI 2 — Wrongful Citation Rate"
+              kpiColor="#D94F3D"
+              title="Wrongful Citations by Violation Type"
+              toggleOptions={[
+                { label: '% of Total', value: 'pct'   },
+                { label: 'Count',      value: 'count' },
+              ]}
+              toggleValue={violationMode}
+              onToggle={setViolationMode}
+            >
+              {showGraph && (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={violationData} layout="vertical" margin={{ top: 4, right: 52, left: 0, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#DDE5F0" horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 11, fill: '#64748B' }} tickFormatter={violationMode === 'pct' ? pctFmt : undefined} axisLine={{ stroke: '#CBD5E1' }} tickLine={false} />
+                    <YAxis dataKey="violation_type" type="category" tick={{ fontSize: 11, fill: '#334155' }} width={130} axisLine={false} tickLine={false} />
+                    <Tooltip formatter={v => [violationMode === 'pct' ? `${v}%` : v, violationMode === 'pct' ? '% of Citations' : 'Count']} />
+                    <Bar dataKey={violationMode} radius={[0, 4, 4, 0]} isAnimationActive={false} maxBarSize={32}>
+                      <LabelList
+                        dataKey={violationMode}
+                        position="right"
+                        formatter={v => violationMode === 'pct' ? `${v}%` : v}
+                        style={{ fontSize: 11, fontWeight: 700, fill: '#1E293B' }}
+                      />
+                      {violationData.map((_, i) => <Cell key={i} fill={VIOLATION_COLORS[i % VIOLATION_COLORS.length]} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+              {showTable && (
+                <div style={{ marginTop: showGraph ? 14 : 0 }}>
+                  <DataTable
+                    columns={[
+                      { label: 'Violation Type',     key: 'violation_type' },
+                      { label: 'Wrongful',           key: 'count', right: true },
+                      { label: '% of All Citations', key: 'pct',   right: true, format: v => `${v}%` },
+                    ]}
+                    rows={violationData}
                   />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-          {showTable && (
-            <div style={{ marginTop: showGraph ? 14 : 0 }}>
-              <DataTable
-                columns={[
-                  { label: 'Neighborhood', key: 'neighborhood' },
-                  { label: 'Gross Fines',  key: 'Amount',        right: true, format: v => `$${numFmt(v)}` },
-                  { label: 'Refunds',      key: 'refund_amount', right: true, format: v => `$${numFmt(v)}` },
-                  { label: 'Net Revenue',  key: 'net',           right: true, format: v => `$${numFmt(v)}` },
-                  { label: 'Gross %',      key: 'Amount_pct',    right: true, format: v => `${v}%` },
-                  { label: 'Refund %',     key: 'refund_pct',    right: true, format: v => `${v}%` },
-                ]}
-                rows={financeData}
-              />
-            </div>
-          )}
-        </ChartCard>
-      </div>
+                </div>
+              )}
+            </ChartCard>
+          </div>
+
+          {/* ── Row 2: KPI 2 Neighborhood ── */}
+          <div style={{ marginBottom: 20 }}>
+            <ChartCard
+              kpiLabel="KPI 2 — Wrongful Citation Rate"
+              kpiColor="#D94F3D"
+              title="Citation Share & Wrongful Rate by Neighborhood"
+              toggleOptions={[
+                { label: '% View', value: 'pct'   },
+                { label: 'Counts', value: 'count' },
+              ]}
+              toggleValue={neighborMode}
+              onToggle={setNeighborMode}
+            >
+              {showGraph && (
+                <ResponsiveContainer width="100%" height={290}>
+                  <ComposedChart data={neighborhoodData} margin={{ top: 26, right: 24, left: 0, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#DDE5F0" vertical={false} />
+                    <XAxis dataKey="neighborhood" tick={{ fontSize: 12, fill: '#475569' }} axisLine={{ stroke: '#CBD5E1' }} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: '#64748B' }} tickFormatter={neighborMode === 'pct' ? pctFmt : undefined} axisLine={false} tickLine={false} width={40} />
+                    <Tooltip formatter={(v, name) => [neighborMode === 'pct' ? `${v}%` : v, name]} />
+                    <Legend verticalAlign="top" height={28} iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                    <Bar
+                      dataKey={neighborMode === 'pct' ? 'citSharePct' : 'citCount'}
+                      name="Citation Share" fill="#4472C4"
+                      radius={[4, 4, 0, 0]} isAnimationActive={false} maxBarSize={48}
+                    >
+                      <LabelList
+                        dataKey={neighborMode === 'pct' ? 'citSharePct' : 'citCount'}
+                        content={({ x, y, width, value }) => (
+                          <TopLabel x={x} y={y} width={width} value={value} formatter={v => neighborMode === 'pct' ? `${v}%` : v} />
+                        )}
+                      />
+                    </Bar>
+                    <Line
+                      dataKey={neighborMode === 'pct' ? 'wrongfulPct' : 'wrongfulCount'}
+                      name="Wrongful Rate" type="monotone"
+                      stroke="#ED7D31" strokeWidth={2.5}
+                      dot={{ r: 5, fill: '#ED7D31', strokeWidth: 0 }}
+                      isAnimationActive={false}
+                    >
+                      <LabelList
+                        dataKey={neighborMode === 'pct' ? 'wrongfulPct' : 'wrongfulCount'}
+                        position="top"
+                        formatter={v => neighborMode === 'pct' ? `${v}%` : v}
+                        style={{ fontSize: 10, fontWeight: 700, fill: '#C05621' }}
+                      />
+                    </Line>
+                  </ComposedChart>
+                </ResponsiveContainer>
+              )}
+              {showTable && (
+                <div style={{ marginTop: showGraph ? 14 : 0 }}>
+                  <DataTable
+                    columns={[
+                      { label: 'Neighborhood',  key: 'neighborhood' },
+                      { label: 'Citations',     key: 'citCount',      right: true },
+                      { label: '% of Total',    key: 'citSharePct',   right: true, format: v => `${v}%` },
+                      { label: 'Wrongful',      key: 'wrongfulCount', right: true },
+                      { label: 'Wrongful Rate', key: 'wrongfulPct',   right: true, format: v => `${v}%` },
+                    ]}
+                    rows={neighborhoodData}
+                  />
+                </div>
+              )}
+            </ChartCard>
+          </div>
+
+          {/* ── Row 3: KPI 5 + KPI 3&4 ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: 20 }}>
+
+            {/* KPI 5 */}
+            <ChartCard
+              kpiLabel="KPI 5 — Refund Claim Approval Rate"
+              kpiColor="#1A7F4B"
+              title="Refund Claims — Approved vs. Denied"
+              toggleOptions={[
+                { label: '% Rate', value: 'pct'   },
+                { label: 'Count',  value: 'count' },
+              ]}
+              toggleValue={claimsMode}
+              onToggle={setClaimsMode}
+            >
+              {showGraph && (
+                <ResponsiveContainer width="100%" height={180}>
+                  <BarChart data={claimsData} layout="vertical" margin={{ top: 4, right: 60, left: 0, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#DDE5F0" horizontal={false} />
+                    <XAxis
+                      type="number"
+                      domain={claimsMode === 'pct' ? [0, 100] : undefined}
+                      tickFormatter={claimsMode === 'pct' ? pctFmt : undefined}
+                      tick={{ fontSize: 11, fill: '#64748B' }} axisLine={{ stroke: '#CBD5E1' }} tickLine={false}
+                    />
+                    <YAxis dataKey="status" type="category" tick={{ fontSize: 12, fill: '#334155' }} width={64} axisLine={false} tickLine={false} />
+                    <Tooltip formatter={v => [claimsMode === 'pct' ? `${v}%` : v, 'Claims']} />
+                    <Bar dataKey={claimsMode} radius={[0, 4, 4, 0]} isAnimationActive={false} maxBarSize={36}>
+                      <LabelList
+                        dataKey={claimsMode}
+                        position="right"
+                        formatter={v => claimsMode === 'pct' ? `${v}%` : v}
+                        style={{ fontSize: 13, fontWeight: 700, fill: '#1E293B' }}
+                      />
+                      <Cell fill="#4CAF50" />
+                      <Cell fill="#D94F3D" />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+              <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap' }}>
+                <div style={{ fontSize: 12, color: '#6B7A99' }}>Filed: <strong>{claimsFiled}</strong></div>
+                <div style={{ fontSize: 12, color: '#1A7F4B' }}>Approved: <strong>{claimsApproved}</strong></div>
+                <div style={{ fontSize: 12, color: '#D94F3D' }}>Denied: <strong>{claimsDenied}</strong></div>
+              </div>
+              {showTable && (
+                <div style={{ marginTop: 14 }}>
+                  <DataTable
+                    columns={[
+                      { label: 'Status', key: 'status' },
+                      { label: 'Count',  key: 'count', right: true },
+                      { label: '% Rate', key: 'pct',   right: true, format: v => `${v}%` },
+                    ]}
+                    rows={claimsData}
+                  />
+                </div>
+              )}
+            </ChartCard>
+
+            {/* KPI 3 & 4 */}
+            <ChartCard
+              kpiLabel="KPI 3 & 4 — Refund Cost Rate / Net Revenue"
+              kpiColor="#E07B00"
+              title="Fine Revenue & Refunds by Neighborhood"
+              toggleOptions={[
+                { label: '$ Amount', value: 'sum' },
+                { label: '% Share',  value: 'pct' },
+              ]}
+              toggleValue={financeMode}
+              onToggle={setFinanceMode}
+            >
+              {showGraph && (
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart data={financeData} margin={{ top: 28, right: 16, left: 0, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#DDE5F0" vertical={false} />
+                    <XAxis
+                      dataKey="neighborhood"
+                      tick={{ fontSize: 11, fill: '#475569' }} angle={-12} textAnchor="end" height={44}
+                      axisLine={{ stroke: '#CBD5E1' }} tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: '#64748B' }}
+                      tickFormatter={financeMode === 'pct' ? pctFmt : dollarFmt}
+                      axisLine={false} tickLine={false} width={52}
+                    />
+                    <Tooltip formatter={(v, name) => [financeMode === 'pct' ? `${v}%` : `$${v.toLocaleString()}`, name]} />
+                    <Legend verticalAlign="top" height={28} iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                    <Bar
+                      dataKey={financeMode === 'sum' ? 'Amount' : 'Amount_pct'}
+                      name="Amount Collected" fill="#4472C4"
+                      radius={[4, 4, 0, 0]} isAnimationActive={false} maxBarSize={32}
+                    >
+                      <LabelList
+                        dataKey={financeMode === 'sum' ? 'Amount' : 'Amount_pct'}
+                        content={({ x, y, width, value }) => (
+                          <TopLabel x={x} y={y} width={width} value={value} formatter={v => financeMode === 'pct' ? `${v}%` : dollarFmt(v)} />
+                        )}
+                      />
+                    </Bar>
+                    <Bar
+                      dataKey={financeMode === 'sum' ? 'refund_amount' : 'refund_pct'}
+                      name="Refund Amount" fill="#ED7D31"
+                      radius={[4, 4, 0, 0]} isAnimationActive={false} maxBarSize={32}
+                    >
+                      <LabelList
+                        dataKey={financeMode === 'sum' ? 'refund_amount' : 'refund_pct'}
+                        content={({ x, y, width, value }) => (
+                          <TopLabel x={x} y={y} width={width} value={value} formatter={v => financeMode === 'pct' ? `${v}%` : dollarFmt(v)} />
+                        )}
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+              {showTable && (
+                <div style={{ marginTop: showGraph ? 14 : 0 }}>
+                  <DataTable
+                    columns={[
+                      { label: 'Neighborhood', key: 'neighborhood' },
+                      { label: 'Gross Fines',  key: 'Amount',        right: true, format: v => `$${numFmt(v)}` },
+                      { label: 'Refunds',      key: 'refund_amount', right: true, format: v => `$${numFmt(v)}` },
+                      { label: 'Net Revenue',  key: 'net',           right: true, format: v => `$${numFmt(v)}` },
+                      { label: 'Gross %',      key: 'Amount_pct',    right: true, format: v => `${v}%` },
+                      { label: 'Refund %',     key: 'refund_pct',    right: true, format: v => `${v}%` },
+                    ]}
+                    rows={financeData}
+                  />
+                </div>
+              )}
+            </ChartCard>
+          </div>
+        </>
+      )}
     </div>
   )
 }

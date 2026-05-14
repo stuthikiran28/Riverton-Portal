@@ -1,11 +1,12 @@
-import { useAllPermits } from '../../hooks/usePermits'
-import { useAllCitations } from '../../hooks/useCitations'
+import { useAllPermitsFull }   from '../../hooks/usePermits'
+import { useAllCitationsFull } from '../../hooks/useCitations'
 import { statusBadge } from '../../components/ui/Badge'
-import { format } from 'date-fns'
 
 export default function Overview() {
-  const { data: permits = [] } = useAllPermits()
-  const { data: citations = [] } = useAllCitations()
+  // Full-fetch hooks — loop through all pages, return plain arrays
+  // Accurate counts across all 1800+ records, not just first 50
+  const { data: permits   = [] } = useAllPermitsFull()
+  const { data: citations = [] } = useAllCitationsFull()
 
   const pending  = permits.filter(p => p.status === 'Pending').length
   const approved = permits.filter(p => p.status === 'Approved').length
@@ -21,19 +22,19 @@ export default function Overview() {
 
       <div className="kpi-strip kpi-4">
         <div className="kpi-card">
-          <div className="kpi-val">{permits.length}</div>
+          <div className="kpi-val">{permits.length.toLocaleString()}</div>
           <div className="kpi-lbl">Total Permits</div>
         </div>
         <div className="kpi-card gold">
-          <div className="kpi-val" style={{ color: 'var(--gold)' }}>{pending}</div>
+          <div className="kpi-val" style={{ color: 'var(--gold)' }}>{pending.toLocaleString()}</div>
           <div className="kpi-lbl">Pending Review</div>
         </div>
         <div className="kpi-card green">
-          <div className="kpi-val" style={{ color: 'var(--green)' }}>{approved}</div>
+          <div className="kpi-val" style={{ color: 'var(--green)' }}>{approved.toLocaleString()}</div>
           <div className="kpi-lbl">Approved Permits</div>
         </div>
         <div className="kpi-card red">
-          <div className="kpi-val" style={{ color: 'var(--red)' }}>{unpaid}</div>
+          <div className="kpi-val" style={{ color: 'var(--red)' }}>{unpaid.toLocaleString()}</div>
           <div className="kpi-lbl">Unpaid Citations</div>
         </div>
       </div>
