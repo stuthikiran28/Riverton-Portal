@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 const TEST_ACCOUNTS = [
@@ -79,10 +79,7 @@ export default function Login() {
       }}
     >
       {/* Quick Access Card */}
-      <div
-        className="login-card"
-        style={{ width: '260px', padding: '1.5rem' }}
-      >
+      <div className="login-card" style={{ width: '260px', padding: '1.5rem' }}>
         <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>
           Quick Access
         </div>
@@ -103,17 +100,10 @@ export default function Login() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
               <div
                 style={{
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '50%',
-                  background: acc.bg,
-                  color: acc.color,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  flexShrink: 0,
+                  width: '28px', height: '28px', borderRadius: '50%',
+                  background: acc.bg, color: acc.color,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '12px', fontWeight: 700, flexShrink: 0,
                 }}
               >
                 {acc.initial}
@@ -124,11 +114,8 @@ export default function Login() {
             </div>
             <div
               style={{
-                fontSize: '11px',
-                color: '#888',
-                fontFamily: 'monospace',
-                marginBottom: '8px',
-                paddingLeft: '36px',
+                fontSize: '11px', color: '#888',
+                fontFamily: 'monospace', marginBottom: '8px', paddingLeft: '36px',
               }}
             >
               {acc.email}
@@ -137,15 +124,11 @@ export default function Login() {
               onClick={() => handleQuickLogin(acc)}
               disabled={quickLoading === acc.role}
               style={{
-                width: '100%',
-                padding: '8px',
-                borderRadius: '6px',
-                fontSize: '12px',
-                fontWeight: 600,
+                width: '100%', padding: '8px', borderRadius: '6px',
+                fontSize: '12px', fontWeight: 600,
                 cursor: quickLoading === acc.role ? 'not-allowed' : 'pointer',
                 border: `1px solid ${acc.border}`,
-                background: acc.bg,
-                color: acc.color,
+                background: acc.bg, color: acc.color,
                 opacity: quickLoading === acc.role ? 0.7 : 1,
                 transition: 'opacity 0.2s',
               }}
@@ -186,7 +169,15 @@ export default function Login() {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Password</label>
+            <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Password</span>
+              <Link
+                to="/forgot-password"
+                style={{ fontSize: '11px', color: '#185FA5', textDecoration: 'none', fontWeight: 500 }}
+              >
+                Forgot password?
+              </Link>
+            </label>
             <input
               className="form-control"
               type="password"
@@ -206,6 +197,50 @@ export default function Login() {
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
+
+        {/* Divider */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '20px 0' }}>
+          <div style={{ flex: 1, height: '1px', background: '#e5e7eb' }} />
+          <span style={{ fontSize: '12px', color: '#9ca3af' }}>New to Riverton?</span>
+          <div style={{ flex: 1, height: '1px', background: '#e5e7eb' }} />
+        </div>
+
+        {/* Register CTA */}
+        <div style={{
+          border: '1px solid #CECBF6',
+          borderRadius: '8px',
+          padding: '14px 16px',
+          background: '#EEEDFE',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+        }}>
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: '#3C3489' }}>
+              Create a resident account
+            </div>
+            <div style={{ fontSize: '11px', color: '#534AB7', marginTop: '2px' }}>
+              Apply for permits and manage your vehicles online
+            </div>
+          </div>
+          <Link
+            to="/register"
+            style={{
+              flexShrink: 0,
+              padding: '8px 14px',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: 600,
+              background: '#534AB7',
+              color: '#fff',
+              textDecoration: 'none',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Be a Member →
+          </Link>
+        </div>
       </div>
     </div>
   )
